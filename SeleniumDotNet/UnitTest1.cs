@@ -12,15 +12,19 @@ namespace SeleniumDotNet
 {
     public class UnitTest1 : IDisposable
     {
+        private readonly WebDriverFactory webDriverFactory;
         private readonly ChromeDriver driver;
 
         private readonly string rootUrl =
-            "https://www.vivino.com/explore?e=eJzLLbI1VMvNzLM1UMtNrLA1NTBQS660DQ1WSwYSLmoFQNn0NNuyxKLM1JLEHLX8ohRbtfykSlu18pLoWKBksW15IgDbDRXC";
+            "https://www.vivino.com";
+
+        private readonly string driverPath;
 
         public UnitTest1()
         {
-            var driverPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory!, "../../../", "chromedriver");
-            this.driver = new ChromeDriver(driverPath);
+            this.webDriverFactory = new WebDriverFactory();
+            this.driverPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory!, "../../../", "chromedriver");
+            this.driver = this.webDriverFactory.Create(this.driverPath, TimeSpan.FromSeconds(3));
         }
 
         [Fact]
@@ -28,26 +32,32 @@ namespace SeleniumDotNet
         {
             this.driver.Manage().Window.Maximize();
             this.driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(3);
-            this.driver.Navigate().GoToUrl(this.rootUrl);
+            this.driver.Navigate().GoToUrl($"{this.rootUrl}/explore?e=eJzLLbI1VMvNzLM1UMtNrLA1NTBQS660DQ1WSwYSLmoFQNn0NNuyxKLM1JLEHLX8ohRbtfykSlu18pLoWKBksW15IgDbDRXC");
             await Task.Delay(TimeSpan.FromSeconds(3));
 
-            var wineCardElements = this.driver.FindElementsByCssSelector("[class*= 'wineCard__wineCardContent']");
+            var anchorElements = this.driver.FindElementsByCssSelector("[class*='wineCard__cardLink']");
             var wines = new List<Wine>();
 
-            foreach (var wineCardElement in wineCardElements)
+            foreach (var anchorElement in anchorElements)
             {
-                wineCardElement.Click();
-                await Task.Delay(TimeSpan.FromSeconds(3));
+                var subDriver = this.webDriverFactory.Create(this.driverPath, TimeSpan.FromSeconds(3));
+                subDriver.Manage().Window.Maximize();
+                subDriver.Navigate().GoToUrl(anchorElement.GetAttribute("href"));
 
                 var wine = new Wine();
 
-                wine.Name = this.driver.FindElementByCssSelector("[class='wine']").Text;
-                wine.Winery = this.driver.FindElementByCssSelector("[class='winery']").Text;
-                wine.Vintage = this.driver.FindElementByCssSelector("[class='vintage']").Text;
-                wine.Price = this.driver.FindElementByCssSelector("[class*= 'purchaseAvailability']").Text;
+                wine.Name = subDriver.FindElementByCssSelector("[class='wine']").Text;
+                wine.Winery = subDriver.FindElementByCssSelector("[class='winery']").Text;
+                wine.Vintage = subDriver.FindElementByCssSelector("[class='vintage']").Text;
+                wine.Price = subDriver.FindElementByCssSelector("[class*= 'purchaseAvailability']").Text;
+
+                var js = (IJavaScriptExecutor) subDriver;
+                js.ExecuteScript("window.scrollBy(0, window.innerHeight)");
+                await Task.Delay(TimeSpan.FromSeconds(3));
+
 
                 var tastingNoteElements =
-                    this.driver.FindElementsByCssSelector("[class*= 'tasteNote__popularKeywords']");
+                    subDriver.FindElementsByCssSelector("[class*='tasteNote__popularKeywords']");
 
                 foreach (var tastingNoteElement in tastingNoteElements)
                 {
@@ -60,17 +70,18 @@ namespace SeleniumDotNet
                 }
 
                 wines.Add(wine);
-                this.driver.Navigate().Back();
+                subDriver.Quit();
                 await Task.Delay(TimeSpan.FromSeconds(3));
-            }
 
+            }
+            
             wines.Count.Should().Be(25);
 
         }
 
         public void Dispose()
         {
-            this.driver?.Dispose();
+            this.driver?.Quit();
         }
     }
 }
