@@ -19,6 +19,9 @@ namespace SeleniumDotNet
             driver.Manage().Timeouts().ImplicitWait = timeout;
             driver.Manage().Window.Maximize();
 
+          var driver = new ChromeDriver(driverPath);
+            driver.Manage().Timeouts().ImplicitWait = timeout;
+
             return driver;
         }
     }
